@@ -6,6 +6,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use frame_system::EnsureRoot;
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -52,6 +53,8 @@ pub type Signature = MultiSignature;
 /// Some way of identifying an account on the chain. We intentionally make it equivalent
 /// to the public key of our transaction signing scheme.
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
+
+pub type AssetId = u64;
 
 /// Balance of an account.
 pub type Balance = u128;
@@ -110,7 +113,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 /// up by `pallet_aura` to implement `fn slot_duration()`.
 ///
 /// Change this to adjust the block time.
-pub const MILLISECS_PER_BLOCK: u64 = 6000;
+pub const MILLISECS_PER_BLOCK: u64 = 1000;
 
 // NOTE: Currently it is not possible to change the slot duration after the chain has started.
 //       Attempting to do so will brick block production.
@@ -258,7 +261,7 @@ impl pallet_balances::Config for Runtime {
 
 parameter_types! {
     pub const TransactionByteFee: Balance = 1;
-    pub OperationalFeeMultiplier: u8 = 5;
+    pub const OperationalFeeMultiplier: u8 = 5;
 }
 
 impl pallet_transaction_payment::Config for Runtime {
@@ -274,12 +277,46 @@ impl pallet_sudo::Config for Runtime {
     type Call = Call;
 }
 
-/// Configure the pallet-template in pallets/template.
-impl pallet_xyk::Config for Runtime {
-    type Event = Event;
+parameter_types! {
+    pub const AssetDeposit: Balance = 0;
+    pub const MetadataDepositBase: Balance = 0;
+    pub const MetadataDepositPerByte: Balance = 0;
+    pub const ApprovalDeposit: Balance = 0;
+    pub const StringLimit: u32 = 20;
 }
 
-// Create the runtime by composing the FRAME pallets that were previously configured.
+impl pallet_assets::Config for Runtime {
+    type Event = Event;
+    type Balance = Balance;
+    type AssetId = AssetId;
+    type Currency = Balances;
+    type ForceOrigin = EnsureRoot<AccountId>;
+    type AssetDeposit = AssetDeposit;
+    type MetadataDepositBase = MetadataDepositBase;
+    type MetadataDepositPerByte = MetadataDepositPerByte;
+    type ApprovalDeposit = ApprovalDeposit;
+    type StringLimit = StringLimit;
+    type Freezer = ();
+    type Extra = ();
+    type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+}
+
+parameter_types! {
+    pub const DEXAddr: AccountId = AccountId::new(hex_literal::hex!(
+        "000000000000000000000000000000000000000000000000000000000000dead"
+    ));
+    pub const LpMinBalance: Balance = 1;
+}
+
+impl pallet_xyk::Config for Runtime {
+    type Event = Event;
+    type AssetId = AssetId;
+    type DEXAddr = DEXAddr;
+    type LpMinBalance = LpMinBalance;
+
+    type AssetIdHash = sp_runtime::traits::BlakeTwo256;
+}
+
 construct_runtime!(
     pub enum Runtime where
         Block = Block,
@@ -294,8 +331,8 @@ construct_runtime!(
         Balances: pallet_balances,
         TransactionPayment: pallet_transaction_payment,
         Sudo: pallet_sudo,
-        // Include the custom logic from the pallet-template in the runtime.
-        TemplateModule: pallet_xyk,
+        Assets: pallet_assets,
+        Xyk: pallet_xyk,
     }
 );
 
@@ -474,7 +511,7 @@ impl_runtime_apis! {
             list_benchmark!(list, extra, frame_system, SystemBench::<Runtime>);
             list_benchmark!(list, extra, pallet_balances, Balances);
             list_benchmark!(list, extra, pallet_timestamp, Timestamp);
-            list_benchmark!(list, extra, pallet_xyk, TemplateModule);
+            // list_benchmark!(list, extra, pallet_xyk, Xyk);
 
             let storage_info = AllPalletsWithSystem::storage_info();
 
@@ -512,7 +549,7 @@ impl_runtime_apis! {
             add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
             add_benchmark!(params, batches, pallet_balances, Balances);
             add_benchmark!(params, batches, pallet_timestamp, Timestamp);
-            add_benchmark!(params, batches, pallet_xyk, TemplateModule);
+            // add_benchmark!(params, batches, pallet_xyk, Xyk);
 
             Ok(batches)
         }
