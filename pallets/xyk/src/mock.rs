@@ -119,7 +119,32 @@ impl pallet_xyk::Config for Test {
     type AssetIdHash = sp_runtime::traits::BlakeTwo256;
 }
 
+pub const ALICE: AccountId = 0x1;
+pub const X: AssetId = 0x1337;
+pub const Y: AssetId = 0x1338;
+pub const MINT: Balance = 1_000_000_000;
+
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-    system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+    let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+
+    pallet_balances::GenesisConfig::<Test> {
+        // Just add some value to make accounts real
+        balances: vec![
+            (ALICE, ExistentialDeposit::get()),
+            (DEXAddr::get(), ExistentialDeposit::get()),
+        ],
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
+
+    let mut ext = sp_io::TestExternalities::new(t);
+    ext.execute_with(|| {
+        Assets::create(Origin::signed(ALICE), X, ALICE, 1).unwrap();
+        Assets::create(Origin::signed(ALICE), Y, ALICE, 1).unwrap();
+        Assets::mint(Origin::signed(ALICE), X, ALICE, MINT).unwrap();
+        Assets::mint(Origin::signed(ALICE), Y, ALICE, MINT).unwrap();
+        System::set_block_number(1);
+    });
+    ext
 }
