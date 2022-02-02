@@ -1,5 +1,16 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+//! For an idea how it works you can consult with [uniswap v2 docs] and its [source code].
+//!
+//! Main difference is that this implementation is much simpler, as it:
+//! - Lacks slippage support
+//! - Doesn't support swapping back (lets say you create liquidity for X and Y, you can trade X for
+//! Y, but not Y for X)
+//! - Doesn't have fees
+//!
+//! [uniswap v2 docs]: https://docs.uniswap.org/protocol/V2/concepts/protocol-overview/how-uniswap-works
+//! [source code]: https://github.com/Uniswap/v2-periphery/blob/master/contracts/UniswapV2Router02.sol
+
 use codec::{Decode, Encode};
 use frame_support::traits::Get;
 use frame_system::RawOrigin;
@@ -34,16 +45,6 @@ impl<T: Config> Pallet<T> {
             RawOrigin::Signed(T::DEXAddr::get()).into(),
             lp.into(),
             T::Lookup::unlookup(to),
-            amount,
-        )
-        .unwrap()
-    }
-
-    fn burn_lp(lp: AssetId<T>, amount: Balance<T>, from: T::AccountId) {
-        pallet_assets::Pallet::<T>::burn(
-            RawOrigin::Signed(T::DEXAddr::get()).into(),
-            lp.into(),
-            T::Lookup::unlookup(from),
             amount,
         )
         .unwrap()
@@ -288,7 +289,13 @@ pub mod pallet {
                 let dx = pair.x_balance * lp_balance / lp_supply;
                 let dy = pair.y_balance * lp_balance / lp_supply;
 
-                Self::burn_lp(lp_id, lp_balance, who.clone());
+                pallet_assets::Pallet::<T>::burn(
+                    RawOrigin::Signed(T::DEXAddr::get()).into(),
+                    lp_id.into(),
+                    T::Lookup::unlookup(who.clone()),
+                    lp_balance,
+                )
+                .unwrap();
 
                 Self::transfer(T::DEXAddr::get(), who.clone(), pair.x_id, dx)
                     .expect("Dex should always have enough tokens");
